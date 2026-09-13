@@ -16,6 +16,23 @@ import (
 	"github.com/btcsuite/btcwallet/wallet/txsizes"
 )
 
+// The hash types the signatures made here carry. Bitcoin Core's defaults,
+// which a wallet on a chain with an opt-in replay-protected signature hash
+// (the Bitcoin BLAKE2b chain's SIGHASH_UNIFIED, 0x20) raises at startup so
+// that every spend it makes on its own is bound to that chain. Set once
+// before any transaction is authored; they are read, not synchronized.
+var (
+	// WitnessSigHashType is used for P2WPKH and nested P2WPKH inputs.
+	WitnessSigHashType = txscript.SigHashAll
+
+	// TaprootSigHashType is used for taproot key-path inputs. A value
+	// other than SigHashDefault makes the signature 65 bytes.
+	TaprootSigHashType = txscript.SigHashDefault
+
+	// LegacySigHashType is used for bare and P2SH inputs.
+	LegacySigHashType = txscript.SigHashAll
+)
+
 // SumOutputValues sums up the list of TxOuts and returns an Amount.
 func SumOutputValues(outputs []*wire.TxOut) (totalOutput btcutil.Amount) {
 	for _, txOut := range outputs {
@@ -260,7 +277,7 @@ func AddAllInputScripts(tx *wire.MsgTx, prevPkScripts [][]byte,
 		default:
 			sigScript := inputs[i].SignatureScript
 			script, err := txscript.SignTxOutput(chainParams, tx, i,
-				pkScript, txscript.SigHashAll, secrets, secrets,
+				pkScript, LegacySigHashType, secrets, secrets,
 				sigScript)
 			if err != nil {
 				return err
@@ -314,7 +331,7 @@ func spendWitnessKeyHash(txIn *wire.TxIn, pkScript []byte,
 		return err
 	}
 	witnessScript, err := txscript.WitnessSignature(tx, hashCache, idx,
-		inputValue, witnessProgram, txscript.SigHashAll, privKey, true)
+		inputValue, witnessProgram, WitnessSigHashType, privKey, true)
 	if err != nil {
 		return err
 	}
@@ -350,7 +367,7 @@ func spendTaprootKey(txIn *wire.TxIn, pkScript []byte,
 	// output.
 	witnessScript, err := txscript.TaprootWitnessSignature(
 		tx, hashCache, idx, inputValue, pkScript,
-		txscript.SigHashDefault, privKey,
+		TaprootSigHashType, privKey,
 	)
 	if err != nil {
 		return err
@@ -414,7 +431,7 @@ func spendNestedWitnessPubKeyHash(txIn *wire.TxIn, pkScript []byte,
 	// With the sigScript in place, we'll next generate the proper witness
 	// that'll allow us to spend the p2wkh output.
 	witnessScript, err := txscript.WitnessSignature(tx, hashCache, idx,
-		inputValue, witnessProgram, txscript.SigHashAll, privKey, compressed)
+		inputValue, witnessProgram, WitnessSigHashType, privKey, compressed)
 	if err != nil {
 		return err
 	}
