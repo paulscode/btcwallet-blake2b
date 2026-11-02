@@ -1717,7 +1717,7 @@ func (w *Wallet) CalculateAccountBalances(account uint32, confirms int32) (Balan
 
 			bals.Total += output.Amount
 			if output.FromCoinBase && !hasMinConfs(
-				int32(w.chainParams.CoinbaseMaturity),
+				coinbaseMaturity(w.chainParams, output.Height),
 				output.Height, syncBlock.Height,
 			) {
 
@@ -2127,8 +2127,8 @@ func (c CreditCategory) String() string {
 func RecvCategory(details *wtxmgr.TxDetails, syncHeight int32, net *chaincfg.Params) CreditCategory {
 	if blockchain.IsCoinBaseTx(&details.MsgTx) {
 		if hasMinConfs(
-			int32(net.CoinbaseMaturity), details.Block.Height,
-			syncHeight,
+			coinbaseMaturity(net, details.Block.Height),
+			details.Block.Height, syncHeight,
 		) {
 
 			return CreditGenerate
@@ -2778,7 +2778,7 @@ func (w *Wallet) AccountBalances(scope waddrmgr.KeyScope,
 			}
 
 			if output.FromCoinBase && !hasMinConfs(
-				int32(w.ChainParams().CoinbaseMaturity),
+				coinbaseMaturity(w.ChainParams(), output.Height),
 				output.Height, syncBlock.Height,
 			) {
 
@@ -2881,7 +2881,9 @@ func (w *Wallet) ListUnspent(minconf, maxconf int32,
 
 			// Only mature coinbase outputs are included.
 			if output.FromCoinBase {
-				target := int32(w.ChainParams().CoinbaseMaturity)
+				target := coinbaseMaturity(
+					w.ChainParams(), output.Height,
+				)
 				if !hasMinConfs(
 					target, output.Height, syncBlock.Height,
 				) {
