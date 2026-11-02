@@ -63,3 +63,9 @@ require (
 // If you change this please run `make lint` to see where else it needs to be
 // updated as well.
 go 1.24.6
+
+// The Bitcoin BLAKE2b chain's coinbase maturity (chaincfg's
+// RelayCoinbaseMaturityAt, used by coinbase_maturity.go) lives in a btcd fork
+// that keeps upstream's module path. A module that requires this one must
+// replace btcd the same way, since replace directives here do not reach it.
+replace github.com/btcsuite/btcd => github.com/paulscode/btcd-blake2b v0.25.1-blake2b.8

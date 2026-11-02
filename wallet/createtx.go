@@ -378,7 +378,7 @@ func (w *Wallet) findEligibleOutputs(dbtx walletdb.ReadTx,
 			continue
 		}
 		if output.FromCoinBase {
-			target := int32(w.chainParams.CoinbaseMaturity)
+			target := coinbaseMaturity(w.chainParams, output.Height)
 			if !hasMinConfs(target, output.Height, bs.Height) {
 				continue
 			}
