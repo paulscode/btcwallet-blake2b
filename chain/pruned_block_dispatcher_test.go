@@ -52,6 +52,10 @@ type prunedBlockDispatcherHarness struct {
 	blocksQueried map[chainhash.Hash]int
 
 	shouldReply uint32 // 0 == true, 1 == false, 2 == invalid reply
+
+	// advertised is the services the dispatcher's last version message
+	// carried.
+	advertised uint64
 }
 
 // newNetworkBlockTestHarness initializes a new PrunedBlockDispatcher test harness
@@ -227,6 +231,15 @@ func (h *prunedBlockDispatcherHarness) newPeer() *peer.Peer {
 		ChainParams:    &chainParams,
 		DisableRelayTx: true,
 		Listeners: peer.MessageListeners{
+			OnVersion: func(_ *peer.Peer,
+				msg *wire.MsgVersion) *wire.MsgReject {
+
+				atomic.StoreUint64(
+					&h.advertised, uint64(msg.Services),
+				)
+
+				return nil
+			},
 			OnGetData: func(p *peer.Peer, msg *wire.MsgGetData) {
 				go func() {
 					h.queriedPeer <- struct{}{}
@@ -253,7 +266,7 @@ func (h *prunedBlockDispatcherHarness) newPeer() *peer.Peer {
 				}
 			},
 		},
-		Services:       wire.SFNodeNetwork | wire.SFNodeWitness,
+		Services:       wire.SFNodeNetwork | wire.SFNodeWitness | sfNodeBlake2b,
 		AllowSelfConns: true,
 	})
 }
@@ -728,6 +741,25 @@ func TestPrunedBlockDispatcherInvalidBlock(t *testing.T) {
 	h.assertPeerReplied(blockChan, errChan, cancelChan, true)
 }
 
+// TestPrunedBlockDispatcherAdvertisesBlake2b checks the dispatcher says it is
+// on the BLAKE2b chain, without which a Knots node from 29.4.3 serves it no
+// block past the fork.
+func TestPrunedBlockDispatcherAdvertisesBlake2b(t *testing.T) {
+	t.Parallel()
+
+	h := newNetworkBlockTestHarness(t, 1, 1, 1)
+	h.start()
+	defer h.stop()
+
+	blockChan, errChan, cancelChan := h.query(h.hashes)
+	h.assertPeerQueried()
+	h.assertPeerReplied(blockChan, errChan, cancelChan, true)
+
+	advertised := wire.ServiceFlag(atomic.LoadUint64(&h.advertised))
+	require.Equal(t, sfNodeBlake2b, advertised&sfNodeBlake2b,
+		"advertised %v", advertised)
+}
+
 func TestSatisfiesRequiredServices(t *testing.T) {
 	t.Parallel()
 
@@ -737,14 +769,23 @@ func TestSatisfiesRequiredServices(t *testing.T) {
 		ok       bool
 	}{
 		{
-			name:     "full node, segwit",
-			services: wire.SFNodeWitness | wire.SFNodeNetwork,
-			ok:       true,
+			name: "full node, segwit, BLAKE2b",
+			services: wire.SFNodeWitness | wire.SFNodeNetwork |
+				sfNodeBlake2b,
+			ok: true,
 		},
 		{
-			name:     "full node segwit, signals limited",
-			services: wire.SFNodeWitness | wire.SFNodeNetwork | prunedNodeService,
-			ok:       true,
+			name: "full node segwit, BLAKE2b, signals limited",
+			services: wire.SFNodeWitness | wire.SFNodeNetwork |
+				sfNodeBlake2b | prunedNodeService,
+			ok: true,
+		},
+		{
+			// A full node on the other chain, or a BLAKE2b release
+			// that does not say so.
+			name:     "full node, segwit, no BLAKE2b",
+			services: wire.SFNodeWitness | wire.SFNodeNetwork,
+			ok:       false,
 		},
 		{
 			name:     "full node, no segwit",

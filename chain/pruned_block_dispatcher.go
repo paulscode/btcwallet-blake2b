@@ -33,9 +33,24 @@ const (
 	// upon connection establishment.
 	defaultPeerReadyTimeout = 15 * time.Second
 
+	// sfNodeBlake2b is NODE_BLAKE2B, the service bit every Bitcoin Knots
+	// release on the BLAKE2b chain advertises. From 29.4.3 such a node
+	// sends no headers, blocks or announcements above the last block before
+	// the proof-of-work change to a peer that does not advertise it, and a
+	// node without it follows the other chain.
+	sfNodeBlake2b wire.ServiceFlag = 1 << 28
+
 	// requiredServices are the requires services we require any candidate
 	// peers to signal such that we can retrieve pruned blocks from them.
-	requiredServices = wire.SFNodeNetwork | wire.SFNodeWitness
+	// The blocks are checked against BLAKE2b proof of work, so only a peer
+	// on that chain can serve them.
+	requiredServices = wire.SFNodeNetwork | wire.SFNodeWitness |
+		sfNodeBlake2b
+
+	// localServices are advertised to the peers we fetch from. Blocks they
+	// send pass BLAKE2b proof-of-work checks here, so NODE_BLAKE2B is true
+	// of this end, and without it they send nothing past the fork.
+	localServices = sfNodeBlake2b
 
 	// prunedNodeService is the service bit signaled by pruned nodes on the
 	// network. Note that this service bit can also be signaled by full
@@ -460,6 +475,7 @@ func (d *PrunedBlockDispatcher) newQueryPeer(addr string) (*queryPeer, error) {
 
 	cfg := &peer.Config{
 		ChainParams: d.cfg.ChainParams,
+		Services:    localServices,
 		// We're not interested in transactions, so disable their relay.
 		DisableRelayTx: true,
 		Listeners: peer.MessageListeners{
