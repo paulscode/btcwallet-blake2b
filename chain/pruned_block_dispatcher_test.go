@@ -760,6 +760,37 @@ func TestPrunedBlockDispatcherAdvertisesBlake2b(t *testing.T) {
 		"advertised %v", advertised)
 }
 
+// TestFilterPeersTakesOnlyBlake2bPeers puts a mix of the backend's peers
+// through the filter: only outbound full nodes that advertise NODE_BLAKE2B
+// are asked for blocks.
+func TestFilterPeersTakesOnlyBlake2bPeers(t *testing.T) {
+	t.Parallel()
+
+	svc := func(f wire.ServiceFlag) string {
+		var raw [8]byte
+		binary.BigEndian.PutUint64(raw[:], uint64(f))
+		return hex.EncodeToString(raw[:])
+	}
+	full := wire.SFNodeNetwork | wire.SFNodeWitness
+
+	eligible, err := filterPeers([]btcjson.GetPeerInfoResult{
+		{Addr: "blake2b:8333", Services: svc(full | sfNodeBlake2b)},
+		{Addr: "sha256:8333", Services: svc(full)},
+		{Addr: "inbound:8333", Services: svc(full | sfNodeBlake2b),
+			Inbound: true},
+		{Addr: "pruned:8333", Services: svc(wire.SFNodeWitness |
+			sfNodeBlake2b | prunedNodeService)},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"blake2b:8333"}, eligible)
+
+	addrs := filterNodeAddrs([]btcjson.GetNodeAddressesResult{
+		{Address: "blake2b:8333", Services: uint64(full | sfNodeBlake2b)},
+		{Address: "sha256:8333", Services: uint64(full)},
+	})
+	require.Equal(t, []string{"blake2b:8333"}, addrs)
+}
+
 func TestSatisfiesRequiredServices(t *testing.T) {
 	t.Parallel()
 

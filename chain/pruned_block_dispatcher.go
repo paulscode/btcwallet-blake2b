@@ -34,22 +34,26 @@ const (
 	defaultPeerReadyTimeout = 15 * time.Second
 
 	// sfNodeBlake2b is NODE_BLAKE2B, the service bit every Bitcoin Knots
-	// release on the BLAKE2b chain advertises. From 29.4.3 such a node
-	// sends no headers, blocks or announcements above the last block before
-	// the proof-of-work change to a peer that does not advertise it, and a
-	// node without it follows the other chain.
+	// release on the BLAKE2b chain (29.4.1 on) advertises. From 29.4.3 such
+	// a node sends no headers, blocks or announcements above the last block
+	// the two chains share (961631 on mainnet) to a peer that does not
+	// advertise it, and it answers a request for a block past that with
+	// nothing at all.
 	sfNodeBlake2b wire.ServiceFlag = 1 << 28
 
 	// requiredServices are the requires services we require any candidate
 	// peers to signal such that we can retrieve pruned blocks from them.
-	// The blocks are checked against BLAKE2b proof of work, so only a peer
-	// on that chain can serve them.
+	// The blocks are checked against BLAKE2b proof of work, so a peer that
+	// does not say it follows that chain is not asked: most such peers
+	// follow the other one, which has none of these blocks. This passes
+	// over btcd nodes on the BLAKE2b chain that do not advertise the bit;
+	// the candidates come from the backend's own peers, which are Knots.
 	requiredServices = wire.SFNodeNetwork | wire.SFNodeWitness |
 		sfNodeBlake2b
 
 	// localServices are advertised to the peers we fetch from. Blocks they
 	// send pass BLAKE2b proof-of-work checks here, so NODE_BLAKE2B is true
-	// of this end, and without it they send nothing past the fork.
+	// of this end, and without it Knots sends nothing past 961631.
 	localServices = sfNodeBlake2b
 
 	// prunedNodeService is the service bit signaled by pruned nodes on the
